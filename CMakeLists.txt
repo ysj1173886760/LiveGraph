@@ -66,3 +66,6 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME AND BUILD_TESTING)
     include(${doctest_SOURCE_DIR}/scripts/cmake/doctest.cmake)
     doctest_discover_tests(tests)
 endif()
+
+add_executable(benchmark benchmark/random_write_benchmark.cpp)
+target_link_libraries(benchmark corelib)
