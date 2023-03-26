@@ -12,6 +12,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
+#include <exception>
 #include <limits>
 #include <ostream>
 #include <random>
@@ -29,9 +30,9 @@ inline int64_t GetRandom(int64_t min, int64_t max) noexcept {
 }
 
 static const std::string db_name = "random_write_benchmark";
-const int64_t point_per_thread = 100;
-const int64_t edge_per_point = 100;
-const int thread_num = 128;
+const int64_t point_per_thread = 1000;
+const int64_t edge_per_point = 1000;
+const int thread_num = 8;
 const int point_num = point_per_thread * thread_num;
 bool wait_visible = true;
 std::atomic_int64_t qps[thread_num];
@@ -46,11 +47,11 @@ void Work(livegraph::Graph *db, int idx) {
         auto txn = db->begin_transaction();
         txn.put_edge(vertex_id, 0, end_vertex_id, value);
         txn.commit(wait_visible);
-        qps->fetch_add(1);
+        qps[idx].fetch_add(1);
       }
     }
-  } catch (...) {
-
+  } catch (const std::exception &e) {
+    std::cout << e.what() << std::endl;
   }
 }
 
