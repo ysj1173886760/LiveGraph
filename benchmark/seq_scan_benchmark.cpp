@@ -1,5 +1,5 @@
 /**
- * @file random_write_benchmark.cpp
+ * @file seq_scan_benchmark.cpp
  * @author sheep (ysj1173886760@gmail.com)
  * @brief 
  * @version 0.1
@@ -8,7 +8,6 @@
  * @copyright Copyright (c) 2023
  * 
  */
-
 #include <atomic>
 #include <cstdint>
 #include <cstddef>
@@ -29,30 +28,44 @@ inline int64_t GetRandom(int64_t min, int64_t max) noexcept {
   return distribution(generator);
 }
 
-static const std::string db_name = "random_write_benchmark";
-const int64_t point_per_thread = 1000;
-const int64_t edge_per_point = 1000;
-const int thread_num = 64;
-const int point_num = point_per_thread * thread_num;
+static const std::string db_name = "seq_scan_benchmark";
+const int64_t point_per_thread = 100;
+const int64_t edge_per_point = 100;
+const int thread_num = 4;
 bool wait_visible = true;
 std::atomic_int64_t qps[thread_num];
 
 void Work(livegraph::Graph *db, int idx) {
+  auto txn = db->begin_read_only_transaction();
+  volatile int64_t id;
+  while (true) {
+    for (int i = point_per_thread * idx; i < point_per_thread * (idx + 1); i++) {
+      auto iter = txn.get_edges(i, 0);
+      while (iter.valid()) {
+        // id = iter.dst_id();
+        iter.next();
+      }
+      qps[idx].fetch_add(1);
+    }
+  }
+}
+
+void PrepareEdge(livegraph::Graph *db) {
   auto value = "arcane";
+  auto txn = db->begin_batch_loader();
   try {
-    for (int i = 0; i < point_per_thread; i++) {
-      auto vertex_id = GetRandom(0, point_num - 1);
+    for (int i = 0; i < point_per_thread * thread_num; i++) {
+      txn.new_vertex();
+    }
+    for (int i = 0; i < point_per_thread * thread_num; i++) {
       for (int j = 0; j < edge_per_point; j++) {
-        auto end_vertex_id = GetRandom(0, point_num - 1);
-        auto txn = db->begin_transaction();
-        txn.put_edge(vertex_id, 0, end_vertex_id, value);
-        txn.commit(wait_visible);
-        qps[idx].fetch_add(1);
+        txn.put_edge(i, 0, j, value);
       }
     }
   } catch (const std::exception &e) {
     std::cout << e.what() << std::endl;
   }
+  txn.commit();
 }
 
 int main(int argc, char* argv[]) {
@@ -60,11 +73,7 @@ int main(int argc, char* argv[]) {
   const std::string wal_path = "./livegraph_wal";
   livegraph::Graph graph(block_path, wal_path);
   std::vector<std::thread> workers;
-  auto txn = graph.begin_batch_loader();
-  for (int i = 0; i < point_num; i++) {
-    txn.new_vertex();
-  }
-  txn.commit();
+  PrepareEdge(&graph);
   for (int i = 0; i < thread_num; i++) {
     workers.push_back(std::thread([&](int idx) {
       Work(&graph, idx);
