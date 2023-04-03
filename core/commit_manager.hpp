@@ -218,8 +218,8 @@ namespace livegraph
 
                 if (fd != EMPTY_FD)
                 {
-                    if (fdatasync(fd) != 0)
-                        std::runtime_error("fdatasync wal file error.");
+                    // if (fdatasync(fd) != 0)
+                    //     std::runtime_error("fdatasync wal file error.");
                 }
 
                 ++num_unfinished;
